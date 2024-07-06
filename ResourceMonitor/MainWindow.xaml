@@ -14,7 +14,7 @@
             <Setter Property="Control.FontFamily" Value="Arial" />
             <Setter Property="Control.FontSize" Value="16" />
             <Setter Property="Control.Foreground" Value="Black" />
-            <Setter Property="ItemsControl.Height" Value="100px"/>
+            <Setter Property="ItemsControl.MinHeight" Value="100px"/>
         </Style>
     </Window.Resources>
     <Window.DataContext>
@@ -22,40 +22,37 @@
     </Window.DataContext>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="0.25*"/>
-            <!--<ColumnDefinition Width="Auto"/>-->
+            <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <!--<GridSplitter Grid.Column="1" ShowsPreview="True" VerticalAlignment="Stretch" Width="3"/>-->
-        <ScrollViewer Grid.Column="0" VerticalAlignment="Stretch">
-            <StackPanel>
-                <Button Name="CPUButton" Style="{StaticResource DefaultButtonStyle}" Click="CPUButton_Click">CPU</Button>
-                <Button Name="RAMButton" Style="{StaticResource DefaultButtonStyle}" Click="RAMButton_Click">RAM</Button>
-                <Button Name="ClearButton" Style="{StaticResource DefaultButtonStyle}" Click="ClearButton_Click">Clear</Button>
-            </StackPanel>
-        </ScrollViewer>
+       
+        <Expander Name="ControlExpander" Grid.Column="0" ExpandDirection="Right" VerticalAlignment="Stretch" Expanded="ControlExpander_Expanded" Collapsed="ControlExpander_Collapsed">
+            <ScrollViewer VerticalAlignment="Stretch">
+                <StackPanel>
+                    <Button Name="CPUButton" Style="{StaticResource DefaultButtonStyle}" Click="CPUButton_Click">CPU</Button>
+                    <Button Name="RAMButton" Style="{StaticResource DefaultButtonStyle}" Click="RAMButton_Click">RAM</Button>
+                    <Button Name="ClearButton" Style="{StaticResource DefaultButtonStyle}" Click="ClearButton_Click">Clear</Button>
+                </StackPanel>
+            </ScrollViewer>
+        </Expander>
+            
+            
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" TextWrapping="Wrap" TextAlignment="Center" FontSize="12" FontWeight="DemiBold">Удерживайте Ctrl, чтобы приостановить обновление.</TextBlock>
 
-        <TextBlock Grid.Column="1" TextWrapping="Wrap" TextAlignment="Center" FontSize="12" FontWeight="DemiBold">Удерживайте Ctrl, чтобы приостановить обновление.</TextBlock>
-
-        <lvc:CartesianChart 
-            Grid.Column="1" 
-            Series="{Binding Series}"
-            SyncContext="{Binding Sync}"
-            EasingFunction="{x:Null}"
-            YAxes="{Binding YAxes}"
-            XAxes="{Binding XAxes}">
-        </lvc:CartesianChart>
-
-        <!--<lvc:CartesianChart Grid.Row="1" DisableAnimations="True" Grid.Column="1" Series="{Binding SeriesCollection}" LegendLocation="Top" >
-                <lvc:CartesianChart.AxisY>
-                    <lvc:Axis MinValue="0"  MaxValue="1" Title="Load" LabelFormatter="{Binding YFormatter}"></lvc:Axis>
-                </lvc:CartesianChart.AxisY>
-                <lvc:CartesianChart.AxisX>
-                    <lvc:Axis ShowLabels="False" Title="Time"></lvc:Axis>
-                </lvc:CartesianChart.AxisX>
-            </lvc:CartesianChart>-->
-
-
+            <lvc:CartesianChart 
+                Grid.Row="1" 
+                Series="{Binding Series}"
+                SyncContext="{Binding Sync}"
+                YAxes="{Binding YAxes}"
+                XAxes="{Binding XAxes}">
+            </lvc:CartesianChart>
+                
+        </Grid>
 
     </Grid>
 </Window>

@@ -27,15 +27,17 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Security.Cryptography;
 using System.Security.Permissions;
+using System.Diagnostics;
+using LiveChartsCore.SkiaSharpView.Painting.Effects;
 
 namespace ResourceMonitor
 {
-    public enum MonitoringParam { CPU = 0, RAM, };
+    public enum MonitoringParam { CPU = 0, RAM, Default};
 
     public class MonitoringUnit
     {
         public string Name { get; set; }
-        public int MaxPoints { get; set; } = 20;
+        public int MaxPoints { get; set; } = 30;
 
         public readonly ObservableCollection<ObservableValue> Values;
         public MonitoringUnit(string name)
@@ -60,11 +62,20 @@ namespace ResourceMonitor
     }
     public class ModelView : ObservableObject
     {
+        private const int TIMER_MS_DELAY = 500;
+
         public Model Model = null;
 
+        private MonitoringParam CurrentParam = MonitoringParam.Default;
         public object Sync { get; } = new object();
+
+        private DispatcherTimer Timer = null;
         public ModelView()
         {
+            Model = new Model();
+            Timer = new DispatcherTimer();
+            Timer.Tick += new EventHandler(Timer_Tick);
+            Timer.Interval = TimeSpan.FromMilliseconds(TIMER_MS_DELAY);
             Series = new ObservableCollection<ISeries>
             {
                 new LineSeries<ObservableValue>
@@ -74,30 +85,67 @@ namespace ResourceMonitor
                     GeometryStroke = null,
                     LineSmoothness = 0,
                     Name = string.Empty,
+                },
+                new LineSeries<ObservablePoint>
+                {
+                    Values = new ObservableCollection<ObservablePoint> { },
+                    GeometryFill = null,
+                    GeometryStroke = null,
+                    Fill = null,
+                    Stroke = new SolidColorPaint
+                    {
+                        Color = SKColors.Red,
+                        StrokeCap = SKStrokeCap.Round,
+                        StrokeThickness = 3,
+                        PathEffect = new DashEffect( new float[] { 7.5f, 15 } ),
+                    }
+
                 }
+
             };
         }
-        public ModelView(Model model) : this()
+        public void UpdateMaxValue()
         {
+            Series[1].Values = new ObservableCollection<ObservablePoint> { new ObservablePoint(0, Model.GetMaxUnitValue(CurrentParam)),
+                                                                               new ObservablePoint((Model?.Units[CurrentParam]?.Values?.Count) ?? 0, Model.GetMaxUnitValue(CurrentParam)) };
 
-            Model = model;
-            Model.Start();
         }
-
-        public void UpdateParam(MonitoringParam param)
+        public void UpdateParam(MonitoringParam Param)
         {
+            if (CurrentParam == Param) return;
+                
             lock (Sync)
             {
-                Model.Stop();
-                XAxes[0].Name = Series[0].Name = Model?.Units[param].Name;
-                Series[0].Values = Model?.Units[param].Values;
-                Model.Start();
+                CurrentParam = Param;
+                Stop();
+                XAxes[0].Name = Series[0].Name = Model?.Units[CurrentParam].Name;
+                Series[0].Values = Model?.Units[CurrentParam].Values;
+                UpdateMaxValue();
+                Start();
             }
         }
 
+        public void Start()
+        {
+            if (!Timer.IsEnabled) Timer.Start();
+        }
+
+        public void Stop()
+        {
+            if (Timer.IsEnabled) Timer.Stop();
+        }
+
+        private void Timer_Tick(object sender, EventArgs e)
+        {
+            Model.AddValues();
+            UpdateMaxValue();
+        }
+
+        public void ClearChart()
+        {
+            Model.ClearValues();
+        }
         public ObservableCollection<ISeries> Series { get; set; }
-
-
         public Axis[] YAxes { get; set; } = new Axis[]
         {
             new Axis
@@ -123,43 +171,31 @@ namespace ResourceMonitor
 
     public class Model
     {
-        private const int TIMER_MS_DELAY = 500;
+
         private object Sync { get; } = new object();
 
-        private DispatcherTimer Timer = null;
-
         private PerformanceTracker Tracker = null;
-
         public Dictionary<MonitoringParam, MonitoringUnit> Units { get; } = null;
         public Model()
         {
             Tracker = new PerformanceTracker(10, false);
-            Timer = new DispatcherTimer();
-            Timer.Tick += new EventHandler(Timer_Tick);
-            Timer.Interval = TimeSpan.FromMilliseconds(TIMER_MS_DELAY);
+           
             Units = new Dictionary<MonitoringParam, MonitoringUnit> { { MonitoringParam.CPU, new MonitoringUnit("CPU") },
                                                                       { MonitoringParam.RAM, new MonitoringUnit("RAM") }};
         }
-
-        public void Start()
-        {
-            if (!Timer.IsEnabled) Timer.Start();
-        }
-
-        public void Stop()
-        {
-            if (Timer.IsEnabled) Timer.Stop();
-        }
-        public void ClearChart()
+        public void ClearValues()
         {
             lock (Sync)
             {
-                Stop();
                 foreach (var unit in Units) unit.Value.Clear();
-                Start();
             }
         }
-        private void Timer_Tick(object sender, EventArgs e)
+        public double GetMaxUnitValue(MonitoringParam Param)
+        {
+            return Units[Param]?.Values?.Select(value => value.Value).Max() ?? 0;
+        }
+
+        public void AddValues()
         {
             foreach (var unit in Units)
             {
@@ -181,11 +217,11 @@ namespace ResourceMonitor
         private bool IsPreviousKeyControl = false;
         private static ModelView ModelView = null;
         private static Model Model = null;
+        
         public MainWindow()
         {
-            Model = new Model();
             InitializeComponent();
-            ModelView = new ModelView(Model);
+            ModelView = new ModelView();
             ModelView.UpdateParam(MonitoringParam.CPU);
             DataContext = ModelView;
         }
@@ -199,17 +235,17 @@ namespace ResourceMonitor
         }
         private void ClearButton_Click(object sender, RoutedEventArgs e)
         {
-            Model.ClearChart();
+            ModelView.ClearChart();
         }
         private void Window_Closing(object sender, CancelEventArgs e)
         {
-            Model.Stop();
+            ModelView.Stop();
         }
         private void Window_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyboardDevice.Modifiers == ModifierKeys.Control)
             {
-                Model.Stop();
+                ModelView.Stop();
                 IsPreviousKeyControl = true;
             }
         }
@@ -217,9 +253,19 @@ namespace ResourceMonitor
         {
             if (IsPreviousKeyControl)
             {
-                Model.Start();
+                ModelView.Start();
                 IsPreviousKeyControl = false;
             }
+        }
+
+        private void ControlExpander_Expanded(object sender, RoutedEventArgs e)
+        {
+            //ModelView.ControlExpanderState = "0.2*";
+        }
+
+        private void ControlExpander_Collapsed(object sender, RoutedEventArgs e)
+        {
+            //ModelView.ControlExpanderState = "0.1*";
         }
 
     }
